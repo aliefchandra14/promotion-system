@@ -13,6 +13,10 @@ const Periode = sequelize.define(
       type: DataTypes.STRING(150),
       allowNull: false,
     },
+    fiscalYear: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
     startDate: {
       type: DataTypes.DATEONLY,
       allowNull: false,

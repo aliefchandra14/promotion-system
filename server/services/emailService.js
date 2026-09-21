@@ -56,3 +56,36 @@ export const sendPeriodActivationEmail = async (periode, employees) => {
     console.error('[email] Failed to send period activation email:', error.message)
   }
 }
+
+export const sendPeriodReminderEmail = async (periode, employees) => {
+  const recipients = employees.map((emp) => emp.email).filter(Boolean)
+
+  if (recipients.length === 0) {
+    return { sent: 0, simulated: false }
+  }
+
+  const mailOptions = {
+    from: process.env.SMTP_FROM || 'no-reply@promotionsystem.local',
+    to: recipients.join(','),
+    subject: `Reminder: promotion period "${periode.name}" is still open`,
+    text: [
+      `This is a reminder that the promotion period "${periode.name}" is currently active.`,
+      `Please make sure to complete your eligibility check and submission before it closes.`,
+      `Period: ${periode.startDate} - ${periode.endDate}`,
+    ].join('\n'),
+  }
+
+  const client = getTransporter()
+
+  if (!client) {
+    console.log(
+      '[email] SMTP is not configured yet (set SMTP_HOST/SMTP_USER/SMTP_PASS). Would have sent reminder:',
+      { to: recipients.length, subject: mailOptions.subject }
+    )
+    return { sent: recipients.length, simulated: true }
+  }
+
+  await client.sendMail(mailOptions)
+  console.log(`[email] Period reminder email sent to ${recipients.length} employee(s)`)
+  return { sent: recipients.length, simulated: false }
+}
