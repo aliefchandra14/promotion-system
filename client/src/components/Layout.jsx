@@ -5,11 +5,12 @@ import {
   FiCalendar,
   FiTrendingUp,
   FiAward,
-  FiCheckSquare,
-  FiSend,
   FiUserCheck,
   FiFlag,
+  FiSettings,
   FiLogOut,
+  FiTool,
+  FiClipboard,
 } from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext'
 
@@ -23,15 +24,20 @@ const navItems = [
     icon: FiTrendingUp,
     show: (user) => user?.role === 'admin',
   },
+  {
+    to: '/eligibility-monitoring',
+    label: 'Eligibility Monitoring',
+    icon: FiClipboard,
+    show: (user) => user?.role === 'admin',
+  },
+  { to: '/settings', label: 'Settings', icon: FiSettings, show: (user) => user?.role === 'admin' },
   { to: '/my-promotion', label: 'My Promotion', icon: FiAward, show: (user) => user?.role !== 'admin' },
-  { to: '/eligibility', label: 'Eligibility', icon: FiCheckSquare, show: (user) => user?.role !== 'admin' },
-  { to: '/submission', label: 'Submission', icon: FiSend, show: (user) => user?.role !== 'admin' },
   { to: '/members', label: 'Members', icon: FiUserCheck, show: (user) => user?.isSuperiorOrHod },
   { to: '/judges', label: 'Judges', icon: FiFlag, show: (user) => user?.isJudge },
 ]
 
 function Layout() {
-  const { user, logout } = useAuth()
+  const { user, logout, maintenance } = useAuth()
   const visibleItems = navItems.filter(({ show }) => show(user))
 
   return (
@@ -82,6 +88,13 @@ function Layout() {
             <p className="text-xs capitalize text-slate-500">{user?.grade || user?.role}</p>
           </div>
         </header>
+
+        {maintenance.enabled && (
+          <div className="flex items-center gap-2 bg-amber-50 px-6 py-2 text-xs font-medium text-amber-700">
+            <FiTool size={14} />
+            Maintenance mode is ON — regular employees cannot log in right now.
+          </div>
+        )}
 
         <main className="flex-1 p-6">
           <Outlet />
