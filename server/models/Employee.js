@@ -45,6 +45,14 @@ const Employee = sequelize.define(
       type: DataTypes.STRING(100),
       allowNull: true,
     },
+    sectionName: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+    },
+    joinDate: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+    },
     trainer: {
       type: DataTypes.STRING(20),
       allowNull: true,

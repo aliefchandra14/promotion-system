@@ -1,8 +1,15 @@
-// Department list — update this array as the organization structure changes.
 export const DEPARTMENTS = [
-  'Human Resources',
+  'Capacitor',
+  'Coil Auto',
+  'Resistor',
+  'Management Office',
+  'Production Engineering',
+  'Mechanical Equipment Group',
   'Finance',
-  'Information Technology',
-  'Marketing',
-  'Operations',
+  'Quality Innovation',
+  'Environment Health and Safety',
+  'Human Resources',
+  'Procurement and Logistic',
+  'Facilities and General Affairs',
+  'Information System',
 ]

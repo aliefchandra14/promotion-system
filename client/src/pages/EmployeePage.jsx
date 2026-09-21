@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { FiSearch, FiUpload, FiArrowUp, FiArrowDown, FiEdit2 } from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext'
 import Pagination from '../components/Pagination'
 import EmployeeEditModal from '../components/EmployeeEditModal'
+import ImportEmployeeModal from '../components/ImportEmployeeModal'
+import { useTableQueryState } from '../hooks/useTableQueryState'
 import { DEPARTMENTS } from '../constants/departments'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
@@ -19,33 +21,36 @@ const columns = [
 
 function EmployeePage() {
   const { user } = useAuth()
-  const fileInputRef = useRef(null)
 
   const [employees, setEmployees] = useState([])
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
-  const [isImporting, setIsImporting] = useState(false)
-
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const [department, setDepartment] = useState('')
-  const [status, setStatus] = useState('')
-  const [sortBy, setSortBy] = useState('createdAt')
-  const [sortOrder, setSortOrder] = useState('DESC')
-  const [page, setPage] = useState(1)
+  const [showImportModal, setShowImportModal] = useState(false)
   const [editingEmployee, setEditingEmployee] = useState(null)
+
+  const [table, updateTable] = useTableQueryState({
+    search: '',
+    department: '',
+    status: '',
+    sortBy: 'createdAt',
+    sortOrder: 'DESC',
+    page: 1,
+  })
+  const { search: debouncedSearch, department, status, sortBy, sortOrder, page } = table
+
+  const [searchInput, setSearchInput] = useState(debouncedSearch)
 
   const isAdmin = user?.role === 'admin'
   const columnCount = columns.length + 1 + (isAdmin ? 1 : 0)
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDebouncedSearch(search)
-      setPage(1)
+      updateTable({ search: searchInput }, { resetPage: true })
     }, 400)
     return () => clearTimeout(timer)
-  }, [search])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput])
 
   const fetchEmployees = useCallback(async () => {
     setIsLoading(true)
@@ -83,46 +88,16 @@ function EmployeePage() {
 
   const handleSort = (field) => {
     if (sortBy === field) {
-      setSortOrder((prev) => (prev === 'ASC' ? 'DESC' : 'ASC'))
+      updateTable({ sortOrder: sortOrder === 'ASC' ? 'DESC' : 'ASC' }, { resetPage: true })
     } else {
-      setSortBy(field)
-      setSortOrder('ASC')
+      updateTable({ sortBy: field, sortOrder: 'ASC' }, { resetPage: true })
     }
-    setPage(1)
   }
 
-  const handleImportClick = () => fileInputRef.current?.click()
-
-  const handleFileChange = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    const formData = new FormData()
-    formData.append('file', file)
-
-    setIsImporting(true)
-    try {
-      const res = await fetch(`${API_URL}/employees/import`, {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      })
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.message || 'Import failed')
-      }
-
-      toast.success(data.message)
-      data.errors?.forEach((err) => toast.error(err, { duration: 6000 }))
-      setPage(1)
-      fetchEmployees()
-    } catch (error) {
-      toast.error(error.message || 'Something went wrong, please try again')
-    } finally {
-      setIsImporting(false)
-      e.target.value = ''
-    }
+  const handleImported = () => {
+    setShowImportModal(false)
+    updateTable({ page: 1 })
+    fetchEmployees()
   }
 
   const renderSortIcon = (field) => {
@@ -140,21 +115,13 @@ function EmployeePage() {
 
         {isAdmin && (
           <div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".xlsx,.xls"
-              onChange={handleFileChange}
-              className="hidden"
-            />
             <button
               type="button"
-              onClick={handleImportClick}
-              disabled={isImporting}
-              className="flex items-center gap-2 rounded-lg bg-quaternary px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-quaternary/30 transition hover:bg-quaternary/90 disabled:cursor-not-allowed disabled:opacity-70"
+              onClick={() => setShowImportModal(true)}
+              className="flex items-center gap-2 rounded-lg bg-quaternary px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-quaternary/30 transition hover:bg-quaternary/90"
             >
               <FiUpload size={16} />
-              {isImporting ? 'Importing...' : 'Import Excel'}
+              Import Excel
             </button>
           </div>
         )}
@@ -168,8 +135,8 @@ function EmployeePage() {
           />
           <input
             type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search by ID, name, or email"
             className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-tertiary focus:ring-2 focus:ring-tertiary/20"
           />
@@ -177,10 +144,7 @@ function EmployeePage() {
 
         <select
           value={department}
-          onChange={(e) => {
-            setDepartment(e.target.value)
-            setPage(1)
-          }}
+          onChange={(e) => updateTable({ department: e.target.value }, { resetPage: true })}
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-tertiary focus:ring-2 focus:ring-tertiary/20"
         >
           <option value="">All Departments</option>
@@ -193,10 +157,7 @@ function EmployeePage() {
 
         <select
           value={status}
-          onChange={(e) => {
-            setStatus(e.target.value)
-            setPage(1)
-          }}
+          onChange={(e) => updateTable({ status: e.target.value }, { resetPage: true })}
           className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 outline-none focus:border-tertiary focus:ring-2 focus:ring-tertiary/20"
         >
           <option value="">All Status</option>
@@ -272,7 +233,13 @@ function EmployeePage() {
           </tbody>
         </table>
 
-        <Pagination page={page} totalPages={totalPages} total={total} limit={LIMIT} onPageChange={setPage} />
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          limit={LIMIT}
+          onPageChange={(newPage) => updateTable({ page: newPage })}
+        />
       </div>
 
       {editingEmployee && (
@@ -284,6 +251,10 @@ function EmployeePage() {
             fetchEmployees()
           }}
         />
+      )}
+
+      {showImportModal && (
+        <ImportEmployeeModal onClose={() => setShowImportModal(false)} onImported={handleImported} />
       )}
     </div>
   )

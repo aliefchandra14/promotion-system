@@ -2,6 +2,7 @@ import { Router } from 'express'
 import {
   getEmployees,
   importEmployees,
+  downloadEmployeeTemplate,
   updateEmployee,
   getEmployeeJudges,
   addEmployeeJudge,
@@ -14,6 +15,7 @@ import upload from '../middleware/upload.js'
 const router = Router()
 
 router.get('/', verifyToken, getEmployees)
+router.get('/import-template', verifyToken, requireAdmin, downloadEmployeeTemplate)
 router.post('/import', verifyToken, requireAdmin, upload.single('file'), importEmployees)
 
 router.patch('/:employeeId', verifyToken, requireAdmin, updateEmployee)

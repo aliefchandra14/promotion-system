@@ -159,8 +159,8 @@ function EmployeeEditModal({ employee, onClose, onSaved }) {
               <select value={form.grade} onChange={handleChange('grade')} className={inputClass}>
                 <option value="">-</option>
                 {GRADES.map((grade) => (
-                  <option key={grade} value={grade}>
-                    {grade}
+                  <option key={grade.step} value={grade.title}>
+                    {grade.title}
                   </option>
                 ))}
               </select>
