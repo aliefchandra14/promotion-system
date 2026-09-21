@@ -1,6 +1,9 @@
 import { Op } from 'sequelize'
-import { Employee, Periode, EmployeePromotion } from '../models/index.js'
+import ExcelJS from 'exceljs'
+import { Employee, Periode, EmployeePromotion, PromotionRequest } from '../models/index.js'
 import { parseWorkbookRows, pickField } from '../utils/excelImport.js'
+import { DEPARTMENTS } from '../constants/departments.js'
+import { GRADES } from '../constants/grades.js'
 
 const SORTABLE_FIELDS = [
   'employeeId',
@@ -9,6 +12,7 @@ const SORTABLE_FIELDS = [
   'currentGrade',
   'promoteGrade',
   'type',
+  'toeic',
   'presentation',
   'status',
   'createdAt',
@@ -70,6 +74,17 @@ export const getEmployeePromotions = async (req, res) => {
 
     const { rows, count } = await EmployeePromotion.findAndCountAll({
       where,
+      include: [
+        {
+          association: 'employee',
+          attributes: ['employeeId', 'email', 'trainer', 'superior', 'hod'],
+          include: [
+            { association: 'trainerInfo', attributes: ['employeeId', 'name'] },
+            { association: 'superiorInfo', attributes: ['employeeId', 'name'] },
+            { association: 'hodInfo', attributes: ['employeeId', 'name'] },
+          ],
+        },
+      ],
       order: [[sortField, sortDirection]],
       limit: pageSize,
       offset: (pageNumber - 1) * pageSize,
@@ -94,10 +109,10 @@ const HEADER_ALIASES = {
   name: ['name'],
   department: ['department'],
   currentGrade: ['currentgrade', 'current grade'],
-  promoteGrade: ['promotegrade', 'promote grade'],
-  type: ['type'],
+  promoteGrade: ['promote to', 'promoteto', 'promotegrade', 'promote grade'],
   presentation: ['presentation'],
-  status: ['status'],
+  type: ['type'],
+  toeic: ['toeic'],
   remark: ['remark'],
 }
 
@@ -107,9 +122,11 @@ export const importEmployeePromotions = async (req, res) => {
       return res.status(400).json({ message: 'Please upload an Excel file' })
     }
 
-    const periode = await resolveWorkingPeriode()
+    const periode = await Periode.findOne({ where: { status: 'active' } })
     if (!periode) {
-      return res.status(400).json({ message: 'Please create a promotion period first' })
+      return res.status(400).json({
+        message: 'Please create and activate a promotion period before importing data',
+      })
     }
 
     const rows = await parseWorkbookRows(req.file.buffer)
@@ -129,7 +146,7 @@ export const importEmployeePromotions = async (req, res) => {
         const promoteGrade = pickField(values, HEADER_ALIASES.promoteGrade) || null
         const type = pickField(values, HEADER_ALIASES.type) || null
         const presentationRaw = pickField(values, HEADER_ALIASES.presentation).toUpperCase()
-        const statusRaw = pickField(values, HEADER_ALIASES.status).toUpperCase()
+        const toeicRaw = pickField(values, HEADER_ALIASES.toeic)
         const remark = pickField(values, HEADER_ALIASES.remark) || ''
 
         if (!/^[0-9]{6}$/.test(employeeId)) {
@@ -145,9 +162,16 @@ export const importEmployeePromotions = async (req, res) => {
         }
 
         const presentation = PRESENTATION_VALUES.includes(presentationRaw) ? presentationRaw : 'NO'
-        const status = STATUS_VALUES.includes(statusRaw) ? statusRaw : 'NORMAL'
 
-        const payload = { name, department, currentGrade, promoteGrade, type, presentation, status, remark }
+        let toeic = null
+        if (toeicRaw) {
+          toeic = Number(toeicRaw)
+          if (Number.isNaN(toeic)) {
+            throw new Error('toeic must be a number')
+          }
+        }
+
+        const payload = { name, department, currentGrade, promoteGrade, type, presentation, toeic, remark }
         const existing = await EmployeePromotion.findOne({
           where: { employeeId, periodeId: periode.id },
         })
@@ -158,6 +182,13 @@ export const importEmployeePromotions = async (req, res) => {
         } else {
           await EmployeePromotion.create({ employeeId, periodeId: periode.id, ...payload })
           results.created += 1
+        }
+
+        if (employeeExists.superior) {
+          await PromotionRequest.findOrCreate({
+            where: { employeeId, periodeId: periode.id, type: 'eligibility' },
+            defaults: { status: 'pending_superior' },
+          })
         }
       } catch (error) {
         results.failed += 1
@@ -181,10 +212,101 @@ export const importEmployeePromotions = async (req, res) => {
   }
 }
 
+const SAMPLE_FIRST_NAMES = [
+  'Andi', 'Budi', 'Citra', 'Dewi', 'Eka', 'Fajar', 'Gita', 'Hendra', 'Indah', 'Joko',
+  'Kiki', 'Lina', 'Made', 'Nia', 'Oscar', 'Putra', 'Qori', 'Rina', 'Sari', 'Tono',
+]
+const SAMPLE_LAST_NAMES = [
+  'Saputra', 'Wijaya', 'Kusuma', 'Pratama', 'Hidayat', 'Santoso', 'Wardani', 'Setiawan', 'Utami', 'Firmansyah',
+  'Nugroho',
+]
+
+const buildSamplePromotionRows = (count) => {
+  const rows = []
+  for (let i = 1; i <= count; i += 1) {
+    const firstName = SAMPLE_FIRST_NAMES[(i - 1) % SAMPLE_FIRST_NAMES.length]
+    const lastName = SAMPLE_LAST_NAMES[(i - 1) % SAMPLE_LAST_NAMES.length]
+    const department = DEPARTMENTS[(i - 1) % DEPARTMENTS.length]
+    const currentGradeIndex = i % (GRADES.length - 1)
+    const currentGrade = GRADES[currentGradeIndex].title
+    const promoteGrade = GRADES[currentGradeIndex + 1].title
+
+    rows.push({
+      no: i,
+      employeeId: String(900000 + i).padStart(6, '0'),
+      name: `${firstName} ${lastName}`,
+      department,
+      currentGrade,
+      promoteGrade,
+      presentation: i % 2 === 0 ? 'YES' : 'NO',
+      type: i % 3 === 0 ? 'SPECIAL' : 'NORMAL',
+      toeic: 500 + ((i * 17) % 400),
+      remark: '',
+    })
+  }
+  return rows
+}
+
+export const downloadEmployeePromotionTemplate = async (req, res) => {
+  try {
+    const workbook = new ExcelJS.Workbook()
+    const worksheet = workbook.addWorksheet('Employee Promotions')
+
+    const headers = [
+      'No.',
+      'Employee ID',
+      'Name',
+      'Department',
+      'Current Grade',
+      'Promote To',
+      'Presentation',
+      'Type',
+      'TOEIC',
+      'Remark',
+    ]
+    const headerRow = worksheet.getRow(1)
+    headers.forEach((header, index) => {
+      headerRow.getCell(index + 1).value = header
+    })
+    headerRow.font = { bold: true }
+
+    worksheet.columns = headers.map(() => ({ width: 18 }))
+
+    buildSamplePromotionRows(40).forEach((row, index) => {
+      const excelRow = worksheet.getRow(2 + index)
+      excelRow.getCell(1).value = row.no
+      excelRow.getCell(2).value = row.employeeId
+      excelRow.getCell(3).value = row.name
+      excelRow.getCell(4).value = row.department
+      excelRow.getCell(5).value = row.currentGrade
+      excelRow.getCell(6).value = row.promoteGrade
+      excelRow.getCell(7).value = row.presentation
+      excelRow.getCell(8).value = row.type
+      excelRow.getCell(9).value = row.toeic
+      excelRow.getCell(10).value = row.remark
+    })
+
+    res.setHeader(
+      'Content-Type',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
+    res.setHeader(
+      'Content-Disposition',
+      'attachment; filename="employee-promotion-import-template.xlsx"'
+    )
+
+    await workbook.xlsx.write(res)
+    res.end()
+  } catch (error) {
+    console.error('Download employee promotion template error:', error)
+    return res.status(500).json({ message: 'Something went wrong on the server' })
+  }
+}
+
 export const updateEmployeePromotion = async (req, res) => {
   try {
     const { id } = req.params
-    const { department, currentGrade, promoteGrade, type, presentation, status, remark } = req.body
+    const { department, currentGrade, promoteGrade, type, toeic, presentation, status, remark } = req.body
 
     const record = await EmployeePromotion.findByPk(id)
     if (!record) {
@@ -197,12 +319,16 @@ export const updateEmployeePromotion = async (req, res) => {
     if (status !== undefined && !STATUS_VALUES.includes(status)) {
       return res.status(400).json({ message: 'Status must be NORMAL or SPECIAL' })
     }
+    if (toeic !== undefined && toeic !== null && toeic !== '' && Number.isNaN(Number(toeic))) {
+      return res.status(400).json({ message: 'TOEIC must be a number' })
+    }
 
     const updates = {}
     if (department !== undefined) updates.department = department || null
     if (currentGrade !== undefined) updates.currentGrade = currentGrade || null
     if (promoteGrade !== undefined) updates.promoteGrade = promoteGrade || null
     if (type !== undefined) updates.type = type || null
+    if (toeic !== undefined) updates.toeic = toeic === '' || toeic === null ? null : Number(toeic)
     if (presentation !== undefined) updates.presentation = presentation
     if (status !== undefined) updates.status = status
     if (remark !== undefined) updates.remark = remark || ''

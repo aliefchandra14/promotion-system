@@ -15,6 +15,7 @@ function EmployeePromotionEditModal({ promotion, onClose, onSaved }) {
     currentGrade: promotion.currentGrade || '',
     promoteGrade: promotion.promoteGrade || '',
     type: promotion.type || '',
+    toeic: promotion.toeic ?? '',
     presentation: promotion.presentation || 'NO',
     status: promotion.status || 'NORMAL',
     remark: promotion.remark || '',
@@ -82,8 +83,8 @@ function EmployeePromotionEditModal({ promotion, onClose, onSaved }) {
               <select value={form.currentGrade} onChange={handleChange('currentGrade')} className={inputClass}>
                 <option value="">-</option>
                 {GRADES.map((grade) => (
-                  <option key={grade} value={grade}>
-                    {grade}
+                  <option key={grade.step} value={grade.title}>
+                    {grade.title}
                   </option>
                 ))}
               </select>
@@ -93,17 +94,28 @@ function EmployeePromotionEditModal({ promotion, onClose, onSaved }) {
               <select value={form.promoteGrade} onChange={handleChange('promoteGrade')} className={inputClass}>
                 <option value="">-</option>
                 {GRADES.map((grade) => (
-                  <option key={grade} value={grade}>
-                    {grade}
+                  <option key={grade.step} value={grade.title}>
+                    {grade.title}
                   </option>
                 ))}
               </select>
             </div>
           </div>
 
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Type</label>
-            <input value={form.type} onChange={handleChange('type')} className={inputClass} />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Type</label>
+              <input value={form.type} onChange={handleChange('type')} className={inputClass} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">TOEIC</label>
+              <input
+                type="number"
+                value={form.toeic}
+                onChange={handleChange('toeic')}
+                className={inputClass}
+              />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

@@ -37,6 +37,10 @@ const EmployeePromotion = sequelize.define(
       type: DataTypes.STRING(50),
       allowNull: true,
     },
+    toeic: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
     presentation: {
       type: DataTypes.STRING(10),
       allowNull: false,
@@ -51,6 +55,11 @@ const EmployeePromotion = sequelize.define(
       type: DataTypes.STRING(500),
       allowNull: true,
       defaultValue: '',
+    },
+    adminDecision: {
+      type: DataTypes.STRING(30),
+      allowNull: false,
+      defaultValue: 'pending',
     },
   },
   {
