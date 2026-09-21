@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken'
 import { Op } from 'sequelize'
-import { Employee, Periode, EmployeeJudge } from '../models/index.js'
+import { Employee, Periode, EmployeeJudge, Setting } from '../models/index.js'
 
 const signToken = (employee) =>
   jwt.sign(
@@ -45,6 +45,15 @@ export const login = async (req, res) => {
     }
 
     if (employee.role !== 'admin') {
+      const settings = await Setting.findByPk(1)
+      if (settings?.maintenanceMode) {
+        return res.status(503).json({
+          message:
+            settings.maintenanceMessage ||
+            'The system is currently under maintenance. Please try again later.',
+        })
+      }
+
       const activePeriode = await Periode.findOne({ where: { status: 'active' } })
       if (!activePeriode) {
         return res.status(403).json({

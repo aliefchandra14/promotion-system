@@ -2,13 +2,14 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { FiUser, FiLock, FiEye, FiEyeOff, FiLoader } from 'react-icons/fi'
+import { FiUser, FiLock, FiEye, FiEyeOff, FiLoader, FiTool } from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 function Login() {
   const [showPassword, setShowPassword] = useState(false)
+  const [maintenanceNotice, setMaintenanceNotice] = useState('')
   const navigate = useNavigate()
   const { setUser } = useAuth()
   const {
@@ -18,6 +19,7 @@ function Login() {
   } = useForm({ mode: 'onBlur' })
 
   const onSubmit = async ({ employeeId, password }) => {
+    setMaintenanceNotice('')
     try {
       const res = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
@@ -29,6 +31,10 @@ function Login() {
       const data = await res.json()
 
       if (!res.ok) {
+        if (res.status === 503) {
+          setMaintenanceNotice(data.message || 'The system is currently under maintenance.')
+          return
+        }
         throw new Error(data.message || 'Login failed')
       }
 
@@ -89,6 +95,13 @@ function Login() {
               Use your Employee ID and password to sign in
             </p>
           </div>
+
+          {maintenanceNotice && (
+            <div className="mb-5 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+              <FiTool className="mt-0.5 shrink-0" size={16} />
+              <span>{maintenanceNotice}</span>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
             <div>

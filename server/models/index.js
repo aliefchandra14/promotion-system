@@ -4,6 +4,7 @@ import Periode from './Periode.js'
 import EmployeeJudge from './EmployeeJudge.js'
 import PromotionRequest from './PromotionRequest.js'
 import EmployeePromotion from './EmployeePromotion.js'
+import Setting from './Setting.js'
 
 Employee.belongsTo(Employee, {
   foreignKey: 'trainer',
@@ -82,16 +83,30 @@ const seedAdmin = async () => {
   }
 }
 
+const seedSettings = async () => {
+  await Setting.findOrCreate({ where: { id: 1 }, defaults: { maintenanceMode: false } })
+}
+
 const connectDB = async () => {
   try {
     await sequelize.authenticate()
     console.log('MSSQL database connection successful')
     await sequelize.sync()
     await seedAdmin()
+    await seedSettings()
   } catch (error) {
     console.error('Failed to connect to database:', error.message)
     process.exit(1)
   }
 }
 
-export { sequelize, Employee, Periode, EmployeeJudge, PromotionRequest, EmployeePromotion, connectDB }
+export {
+  sequelize,
+  Employee,
+  Periode,
+  EmployeeJudge,
+  PromotionRequest,
+  EmployeePromotion,
+  Setting,
+  connectDB,
+}

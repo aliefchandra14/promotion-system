@@ -11,6 +11,7 @@ import periodeRoutes from './routes/periodeRoutes.js'
 import dashboardRoutes from './routes/dashboardRoutes.js'
 import promotionRoutes from './routes/promotionRoutes.js'
 import employeePromotionRoutes from './routes/employeePromotionRoutes.js'
+import settingsRoutes from './routes/settingsRoutes.js'
 
 const app = express()
 
@@ -29,6 +30,7 @@ app.use('/api/periodes', periodeRoutes)
 app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/promotions', promotionRoutes)
 app.use('/api/employee-promotions', employeePromotionRoutes)
+app.use('/api/settings', settingsRoutes)
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Endpoint not found' })
