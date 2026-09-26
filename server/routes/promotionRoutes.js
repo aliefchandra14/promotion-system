@@ -5,6 +5,7 @@ import {
   getMyPromotions,
   startPromotionRequest,
   getMemberRequests,
+  getPendingCount,
   decideRequest,
   getJudgingAssignments,
   getEligibilityMonitor,
@@ -16,6 +17,7 @@ const router = Router()
 router.get('/me', verifyToken, getMyPromotions)
 router.post('/start', verifyToken, startPromotionRequest)
 router.get('/members', verifyToken, getMemberRequests)
+router.get('/pending-count', verifyToken, getPendingCount)
 router.post('/:id/decision', verifyToken, decideRequest)
 router.get('/judging', verifyToken, getJudgingAssignments)
 router.get('/eligibility-monitor', verifyToken, requireAdmin, getEligibilityMonitor)

@@ -20,6 +20,8 @@ const MembersPage = lazy(() => import('./pages/MembersPage'))
 const JudgesPage = lazy(() => import('./pages/JudgesPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const EligibilityMonitoringPage = lazy(() => import('./pages/EligibilityMonitoringPage'))
+const SummaryPage = lazy(() => import('./pages/SummaryPage'))
+const PresentationsPage = lazy(() => import('./pages/PresentationsPage'))
 
 const PageFallback = () => <p className="p-6 text-sm text-slate-400">Loading...</p>
 
@@ -94,6 +96,22 @@ function AppRoutes() {
           element={
             <AdminRoute>
               <EligibilityMonitoringPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/summary"
+          element={
+            <AdminRoute>
+              <SummaryPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/presentations"
+          element={
+            <AdminRoute>
+              <PresentationsPage />
             </AdminRoute>
           }
         />

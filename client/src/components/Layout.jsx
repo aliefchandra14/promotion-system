@@ -11,6 +11,8 @@ import {
   FiLogOut,
   FiTool,
   FiClipboard,
+  FiFileText,
+  FiMonitor,
 } from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext'
 
@@ -30,6 +32,13 @@ const navItems = [
     icon: FiClipboard,
     show: (user) => user?.role === 'admin',
   },
+  { to: '/summary', label: 'Summary', icon: FiFileText, show: (user) => user?.role === 'admin' },
+  {
+    to: '/presentations',
+    label: 'Presentations',
+    icon: FiMonitor,
+    show: (user) => user?.role === 'admin',
+  },
   { to: '/settings', label: 'Settings', icon: FiSettings, show: (user) => user?.role === 'admin' },
   { to: '/my-promotion', label: 'My Promotion', icon: FiAward, show: (user) => user?.role !== 'admin' },
   { to: '/members', label: 'Members', icon: FiUserCheck, show: (user) => user?.isSuperiorOrHod },
@@ -37,8 +46,9 @@ const navItems = [
 ]
 
 function Layout() {
-  const { user, logout, maintenance } = useAuth()
+  const { user, logout, maintenance, pendingCount } = useAuth()
   const visibleItems = navItems.filter(({ show }) => show(user))
+  const badgeFor = (to) => (to === '/members' ? pendingCount : 0)
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -63,8 +73,25 @@ function Layout() {
                 }`
               }
             >
-              <Icon size={18} />
-              {label}
+              {({ isActive }) => {
+                const badge = badgeFor(to)
+                return (
+                  <>
+                    <Icon size={18} />
+                    {label}
+                    {badge > 0 && (
+                      <span
+                        title={`${badge} waiting for your decision`}
+                        className={`ml-auto min-w-5 rounded-full px-1.5 py-0.5 text-center text-xs font-semibold leading-none ${
+                          isActive ? 'bg-white text-primary' : 'bg-quaternary text-white'
+                        }`}
+                      >
+                        {badge > 99 ? '99+' : badge}
+                      </span>
+                    )}
+                  </>
+                )
+              }}
             </NavLink>
           ))}
         </nav>

@@ -30,3 +30,6 @@ lerna-debug.log*
 *.sln
 *.sw?
 *.local
+
+# Uploaded project files (user data, never commit)
+server/uploads/

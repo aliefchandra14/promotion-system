@@ -89,3 +89,30 @@ export const sendPeriodReminderEmail = async (periode, employees) => {
   console.log(`[email] Period reminder email sent to ${recipients.length} employee(s)`)
   return { sent: recipients.length, simulated: false }
 }
+
+export const isEmailConfigured = () => Boolean(getTransporter())
+
+// Sends one email with its own To / CC. When SMTP is not configured yet nothing is sent
+// and `simulated: true` is returned, so the caller can tell the admin.
+export const deliverEmail = async ({ to, cc = [], subject, text, html }) => {
+  const client = getTransporter()
+  if (!client) return { simulated: true }
+
+  const info = await client.sendMail({
+    from: process.env.SMTP_FROM || 'no-reply@promotionsystem.local',
+    to,
+    cc: cc.length > 0 ? cc.join(', ') : undefined,
+    subject,
+    text,
+    html,
+  })
+
+  // A mail server may accept the CC addresses but refuse the main recipient. nodemailer still
+  // resolves in that case, so check it explicitly: the person who must get the email did not.
+  const rejected = (info.rejected || []).map((address) => String(address).toLowerCase())
+  if (rejected.includes(String(to).toLowerCase())) {
+    throw new Error(`The mail server rejected the address ${to}`)
+  }
+
+  return { simulated: false }
+}

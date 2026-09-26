@@ -12,6 +12,9 @@ import dashboardRoutes from './routes/dashboardRoutes.js'
 import promotionRoutes from './routes/promotionRoutes.js'
 import employeePromotionRoutes from './routes/employeePromotionRoutes.js'
 import settingsRoutes from './routes/settingsRoutes.js'
+import summaryRoutes from './routes/summaryRoutes.js'
+import presentationRoutes from './routes/presentationRoutes.js'
+import projectSubmissionRoutes from './routes/projectSubmissionRoutes.js'
 
 const app = express()
 
@@ -31,6 +34,9 @@ app.use('/api/dashboard', dashboardRoutes)
 app.use('/api/promotions', promotionRoutes)
 app.use('/api/employee-promotions', employeePromotionRoutes)
 app.use('/api/settings', settingsRoutes)
+app.use('/api/summaries', summaryRoutes)
+app.use('/api/presentations', presentationRoutes)
+app.use('/api/project-submission', projectSubmissionRoutes)
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Endpoint not found' })

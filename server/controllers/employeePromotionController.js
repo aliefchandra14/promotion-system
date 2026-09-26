@@ -2,7 +2,6 @@ import { Op } from 'sequelize'
 import ExcelJS from 'exceljs'
 import { Employee, Periode, EmployeePromotion, PromotionRequest } from '../models/index.js'
 import { parseWorkbookRows, pickField } from '../utils/excelImport.js'
-import { DEPARTMENTS } from '../constants/departments.js'
 import { GRADES } from '../constants/grades.js'
 
 const SORTABLE_FIELDS = [
@@ -212,39 +211,36 @@ export const importEmployeePromotions = async (req, res) => {
   }
 }
 
-const SAMPLE_FIRST_NAMES = [
-  'Andi', 'Budi', 'Citra', 'Dewi', 'Eka', 'Fajar', 'Gita', 'Hendra', 'Indah', 'Joko',
-  'Kiki', 'Lina', 'Made', 'Nia', 'Oscar', 'Putra', 'Qori', 'Rina', 'Sari', 'Tono',
-]
-const SAMPLE_LAST_NAMES = [
-  'Saputra', 'Wijaya', 'Kusuma', 'Pratama', 'Hidayat', 'Santoso', 'Wardani', 'Setiawan', 'Utami', 'Firmansyah',
-  'Nugroho',
-]
+const TEMPLATE_ROW_LIMIT = 40
 
-const buildSamplePromotionRows = (count) => {
-  const rows = []
-  for (let i = 1; i <= count; i += 1) {
-    const firstName = SAMPLE_FIRST_NAMES[(i - 1) % SAMPLE_FIRST_NAMES.length]
-    const lastName = SAMPLE_LAST_NAMES[(i - 1) % SAMPLE_LAST_NAMES.length]
-    const department = DEPARTMENTS[(i - 1) % DEPARTMENTS.length]
-    const currentGradeIndex = i % (GRADES.length - 1)
-    const currentGrade = GRADES[currentGradeIndex].title
-    const promoteGrade = GRADES[currentGradeIndex + 1].title
+const getNextGrade = (gradeTitle) => {
+  const index = GRADES.findIndex((grade) => grade.title === gradeTitle)
+  return index >= 0 ? GRADES[index + 1] ?? null : null
+}
 
-    rows.push({
-      no: i,
-      employeeId: String(900000 + i).padStart(6, '0'),
-      name: `${firstName} ${lastName}`,
-      department,
-      currentGrade,
-      promoteGrade,
-      presentation: i % 2 === 0 ? 'YES' : 'NO',
-      type: i % 3 === 0 ? 'SPECIAL' : 'NORMAL',
-      toeic: 500 + ((i * 17) % 400),
+// Rows come from the real employees table so every employeeId in the template is importable.
+// Employees who can still be promoted (their grade has a next step) are listed first.
+const buildTemplateRows = (employees) => {
+  const promotable = employees.filter((emp) => getNextGrade(emp.grade))
+  const others = employees.filter((emp) => !getNextGrade(emp.grade))
+
+  return [...promotable, ...others].slice(0, TEMPLATE_ROW_LIMIT).map((emp, index) => {
+    const no = index + 1
+    const nextGrade = getNextGrade(emp.grade)
+
+    return {
+      no,
+      employeeId: emp.employeeId,
+      name: emp.name,
+      department: emp.department ?? '',
+      currentGrade: emp.grade ?? '',
+      promoteGrade: nextGrade?.title ?? '',
+      presentation: no % 2 === 0 ? 'YES' : 'NO',
+      type: no % 3 === 0 ? 'SPECIAL' : 'NORMAL',
+      toeic: nextGrade?.toeic ? 500 + ((no * 17) % 400) : null,
       remark: '',
-    })
-  }
-  return rows
+    }
+  })
 }
 
 export const downloadEmployeePromotionTemplate = async (req, res) => {
@@ -272,7 +268,14 @@ export const downloadEmployeePromotionTemplate = async (req, res) => {
 
     worksheet.columns = headers.map(() => ({ width: 18 }))
 
-    buildSamplePromotionRows(40).forEach((row, index) => {
+    const employees = await Employee.findAll({
+      where: { role: 'employee', isActive: true },
+      attributes: ['employeeId', 'name', 'department', 'grade'],
+      order: [['employeeId', 'ASC']],
+      raw: true,
+    })
+
+    buildTemplateRows(employees).forEach((row, index) => {
       const excelRow = worksheet.getRow(2 + index)
       excelRow.getCell(1).value = row.no
       excelRow.getCell(2).value = row.employeeId

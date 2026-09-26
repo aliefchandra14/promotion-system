@@ -5,6 +5,10 @@ import EmployeeJudge from './EmployeeJudge.js'
 import PromotionRequest from './PromotionRequest.js'
 import EmployeePromotion from './EmployeePromotion.js'
 import Setting from './Setting.js'
+import PromotionSummary from './PromotionSummary.js'
+import PromotionPresentation from './PromotionPresentation.js'
+import ProjectSubmissionFile from './ProjectSubmissionFile.js'
+import PresentationReminderLog from './PresentationReminderLog.js'
 
 Employee.belongsTo(Employee, {
   foreignKey: 'trainer',
@@ -107,6 +111,10 @@ export {
   EmployeeJudge,
   PromotionRequest,
   EmployeePromotion,
+  PromotionSummary,
+  PromotionPresentation,
+  ProjectSubmissionFile,
+  PresentationReminderLog,
   Setting,
   connectDB,
 }

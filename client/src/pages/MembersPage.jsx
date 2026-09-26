@@ -3,6 +3,7 @@ import { FiCheck, FiX, FiSearch, FiArrowUp, FiArrowDown, FiLoader } from 'react-
 import Pagination from '../components/Pagination'
 import PromotionDecisionModal from '../components/PromotionDecisionModal'
 import { useTableQueryState } from '../hooks/useTableQueryState'
+import { useAuth } from '../context/AuthContext'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 const LIMIT = 10
@@ -26,6 +27,7 @@ const columns = [
 ]
 
 function MembersPage() {
+  const { refreshPending } = useAuth()
   const [requests, setRequests] = useState([])
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
@@ -104,6 +106,7 @@ function MembersPage() {
   const handleDecided = () => {
     setDecision(null)
     fetchRequests()
+    refreshPending()
   }
 
   return (
@@ -138,7 +141,7 @@ function MembersPage() {
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search by ID or name"
+            placeholder="Search in all columns"
             className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-800 outline-none transition focus:border-tertiary focus:ring-2 focus:ring-tertiary/20"
           />
         </div>
