@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser'
 import morgan from 'morgan'
 import compression from 'compression'
 import { connectDB } from './models/index.js'
+import { ensureFiscalYearPeriods } from './services/periodeService.js'
 import authRoutes from './routes/authRoutes.js'
 import employeeRoutes from './routes/employeeRoutes.js'
 import periodeRoutes from './routes/periodeRoutes.js'
@@ -15,6 +16,8 @@ import settingsRoutes from './routes/settingsRoutes.js'
 import summaryRoutes from './routes/summaryRoutes.js'
 import presentationRoutes from './routes/presentationRoutes.js'
 import projectSubmissionRoutes from './routes/projectSubmissionRoutes.js'
+import judgingRoutes from './routes/judgingRoutes.js'
+import taskSubmissionRoutes from './routes/taskSubmissionRoutes.js'
 
 const app = express()
 
@@ -37,6 +40,8 @@ app.use('/api/settings', settingsRoutes)
 app.use('/api/summaries', summaryRoutes)
 app.use('/api/presentations', presentationRoutes)
 app.use('/api/project-submission', projectSubmissionRoutes)
+app.use('/api/judging', judgingRoutes)
+app.use('/api/task-submission', taskSubmissionRoutes)
 
 app.use((req, res) => {
   res.status(404).json({ message: 'Endpoint not found' })
@@ -50,7 +55,9 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000
 
-connectDB().then(() => {
+connectDB().then(async () => {
+  // The current fiscal year always has its Periode 1 & 2 (created here if missing).
+  await ensureFiscalYearPeriods()
   app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`)
   })

@@ -7,7 +7,7 @@ import {
   getMemberRequests,
   getPendingCount,
   decideRequest,
-  getJudgingAssignments,
+  getRequestSubmissionHistory,
   getEligibilityMonitor,
   bulkEligibilityAction,
 } from '../controllers/promotionController.js'
@@ -19,7 +19,7 @@ router.post('/start', verifyToken, startPromotionRequest)
 router.get('/members', verifyToken, getMemberRequests)
 router.get('/pending-count', verifyToken, getPendingCount)
 router.post('/:id/decision', verifyToken, decideRequest)
-router.get('/judging', verifyToken, getJudgingAssignments)
+router.get('/:id/submission-history', verifyToken, getRequestSubmissionHistory)
 router.get('/eligibility-monitor', verifyToken, requireAdmin, getEligibilityMonitor)
 router.post('/eligibility-monitor/bulk-action', verifyToken, requireAdmin, bulkEligibilityAction)
 

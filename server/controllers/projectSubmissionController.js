@@ -1,7 +1,9 @@
 import fs from 'fs'
 import path from 'path'
-import { ProjectSubmissionFile } from '../models/index.js'
-import { SUBMISSION_GUIDELINES } from '../constants/submissionGuidelines.js'
+import { Employee, ProjectSubmissionFile } from '../models/index.js'
+import { SUBMISSION_STATUS, getSubmissionStatus } from '../services/submissionStatus.js'
+import { getSubmissionHistory } from '../services/submissionHistoryService.js'
+import { SUBMISSION_GUIDELINES, getGradeGuidelines } from '../constants/submissionGuidelines.js'
 import { getSubmissionAccess } from '../services/submissionAccess.js'
 import { PROJECT_UPLOAD_ROOT, decodeOriginalName, getExtension } from '../middleware/uploadProject.js'
 
@@ -29,13 +31,43 @@ export const getProjectSubmission = async (req, res) => {
         })
       : []
 
+    const employee = await Employee.findOne({
+      where: { employeeId: req.user.employeeId },
+      attributes: ['employeeId', 'superior', 'hod'],
+      include: [
+        { model: Employee, as: 'superiorInfo', attributes: ['name'] },
+        { model: Employee, as: 'hodInfo', attributes: ['name'] },
+      ],
+    })
+    const request = access.request || null
+    const history = access.periode
+      ? await getSubmissionHistory(req.user.employeeId, access.periode.id, request)
+      : []
+    const status = getSubmissionStatus(request, {
+      superiorName: employee?.superiorInfo?.name || employee?.superior || null,
+      hodName: employee?.hodInfo?.name || employee?.hod || null,
+    })
+
     return res.status(200).json({
       guidelines: SUBMISSION_GUIDELINES,
+      // Project guidelines for the grade this employee is being promoted to.
+      gradeGuidelines: {
+        grade: access.promotion?.promoteGrade || null,
+        items: getGradeGuidelines(access.promotion?.promoteGrade),
+      },
       periode: access.periode,
       presentation: access.presentation,
       canUpload: access.canUpload,
+      canSubmit: access.canUpload && files.length > 0 && files.length <= SUBMISSION_GUIDELINES.maxFiles,
       reason: access.reason,
       files: files.map(toDto),
+      submission: {
+        status: status.key,
+        label: SUBMISSION_STATUS[status.key],
+        by: status.by,
+        remark: request?.status === 'rejected' ? request.hodRemark || request.superiorRemark : null,
+      },
+      history,
     })
   } catch (error) {
     console.error('Get project submission error:', error)
@@ -56,11 +88,12 @@ export const requireSubmissionAccess = async (req, res, next) => {
     })
     if (count >= SUBMISSION_GUIDELINES.maxFiles) {
       return res.status(400).json({
-        message: `You can upload up to ${SUBMISSION_GUIDELINES.maxFiles} files. Delete one to upload another.`,
+        message: `You can upload only ${SUBMISSION_GUIDELINES.maxFiles} file. Delete the current file to upload a different one.`,
       })
     }
 
     req.submissionAccess = access
+    req.uploadPeriodeId = access.periode.id
     return next()
   } catch (error) {
     console.error('Submission access check error:', error)

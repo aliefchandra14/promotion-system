@@ -1,18 +1,19 @@
 import { Employee, EmployeePromotion, PresentationReminderLog } from '../models/index.js'
 import { buildReminderEmail } from './reminderTemplates.js'
-import { deliverEmail, isEmailConfigured } from './emailService.js'
+import { deliverEmail, isEmailConfigured, canSendEmail } from './emailService.js'
+import { isDevMode } from './appMode.js'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const SEND_CONCURRENCY = 5
 
-const cleanEmail = (value) => {
+export const cleanEmail = (value) => {
   const trimmed = typeof value === 'string' ? value.trim() : ''
   return EMAIL_PATTERN.test(trimmed) ? trimmed : null
 }
 
 // Emails of everyone who should be copied as "admin": active admin accounts, plus an optional
 // ADMIN_EMAIL from the environment (useful while the admin account has no email of its own).
-const getAdminEmails = async () => {
+export const getAdminEmails = async () => {
   const admins = await Employee.findAll({
     where: { role: 'admin', isActive: true },
     attributes: ['email'],
@@ -111,6 +112,7 @@ export const previewReminder = async ({ type, presentation, periode }) => {
 
   return {
     smtpConfigured: isEmailConfigured(),
+    devMode: await isDevMode(),
     recipients: recipients.map(({ employee, to, toIsTrainer, cc }) => ({
       employeeId: employee.employeeId,
       name: employee.name,
@@ -126,7 +128,8 @@ export const previewReminder = async ({ type, presentation, periode }) => {
 // Sends one email per employee (each with its own To / CC), a few at a time.
 export const sendReminder = async ({ type, presentation, periode, sentBy }) => {
   const { recipients, skipped } = await resolveReminderRecipients(presentation)
-  const simulated = !isEmailConfigured()
+  const devMode = await isDevMode()
+  const simulated = !(await canSendEmail())
   const failed = []
   let sent = 0
 
@@ -146,9 +149,8 @@ export const sendReminder = async ({ type, presentation, periode, sentBy }) => {
   }
 
   if (simulated) {
-    console.log(
-      `[email] SMTP is not configured yet. Would have sent ${sent} ${type} reminder(s) for ${presentation.grade}.`
-    )
+    const reason = devMode ? 'development mode is on' : 'SMTP is not configured yet'
+    console.log(`[email] Not sent (${reason}). Would have sent ${sent} ${type} reminder(s) for ${presentation.grade}.`)
   } else {
     console.log(`[email] ${type} reminder for ${presentation.grade}: ${sent} sent, ${failed.length} failed`)
   }
@@ -162,5 +164,5 @@ export const sendReminder = async ({ type, presentation, periode, sentBy }) => {
     sentBy: sentBy || null,
   })
 
-  return { sent, failed, skipped, simulated, total: recipients.length }
+  return { sent, failed, skipped, simulated, devMode, total: recipients.length }
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { FiPlus, FiSearch, FiArrowUp, FiArrowDown, FiEdit2, FiBell, FiCheck } from 'react-icons/fi'
+import { useNavigate } from 'react-router-dom'
+import { FiPlus, FiSearch, FiArrowUp, FiArrowDown, FiEdit2, FiBell, FiCheck, FiEye } from 'react-icons/fi'
 import Pagination from '../components/Pagination'
 import PresentationModal from '../components/PresentationModal'
 import ReminderModal from '../components/ReminderModal'
@@ -55,6 +56,7 @@ const isEnded = (endDate) => {
 }
 
 function PresentationsPage() {
+  const navigate = useNavigate()
   const [presentations, setPresentations] = useState([])
   const [periode, setPeriode] = useState(null)
   const [total, setTotal] = useState(0)
@@ -269,13 +271,22 @@ function PresentationsPage() {
                     </div>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => setModal({ presentation: row })}
-                      className="flex items-center gap-1 text-xs font-medium text-secondary hover:text-primary"
-                    >
-                      <FiEdit2 size={13} /> Edit
-                    </button>
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/presentations/${row.id}`)}
+                        className="flex items-center gap-1 text-xs font-medium text-secondary hover:text-primary"
+                      >
+                        <FiEye size={13} /> Detail
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setModal({ presentation: row })}
+                        className="flex items-center gap-1 text-xs font-medium text-secondary hover:text-primary"
+                      >
+                        <FiEdit2 size={13} /> Edit
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))

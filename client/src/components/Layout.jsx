@@ -13,6 +13,7 @@ import {
   FiClipboard,
   FiFileText,
   FiMonitor,
+  FiCode,
 } from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext'
 
@@ -46,9 +47,10 @@ const navItems = [
 ]
 
 function Layout() {
-  const { user, logout, maintenance, pendingCount } = useAuth()
+  const { user, logout, maintenance, pendingCount, judgingPendingCount, appMode } = useAuth()
   const visibleItems = navItems.filter(({ show }) => show(user))
-  const badgeFor = (to) => (to === '/members' ? pendingCount : 0)
+  const badges = { '/members': pendingCount, '/judges': judgingPendingCount }
+  const badgeFor = (to) => badges[to] || 0
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -81,7 +83,7 @@ function Layout() {
                     {label}
                     {badge > 0 && (
                       <span
-                        title={`${badge} waiting for your decision`}
+                        title={`${badge} waiting for your ${to === '/judges' ? 'assessment' : 'decision'}`}
                         className={`ml-auto min-w-5 rounded-full px-1.5 py-0.5 text-center text-xs font-semibold leading-none ${
                           isActive ? 'bg-white text-primary' : 'bg-quaternary text-white'
                         }`}
@@ -120,6 +122,13 @@ function Layout() {
           <div className="flex items-center gap-2 bg-amber-50 px-6 py-2 text-xs font-medium text-amber-700">
             <FiTool size={14} />
             Maintenance mode is ON — regular employees cannot log in right now.
+          </div>
+        )}
+
+        {appMode === 'development' && (
+          <div className="flex items-center gap-2 bg-sky-50 px-6 py-2 text-xs font-medium text-sky-700">
+            <FiCode size={14} />
+            Development mode is ON — no emails are sent and presentation dates are not enforced.
           </div>
         )}
 

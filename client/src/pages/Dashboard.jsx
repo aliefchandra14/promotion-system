@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { FiUsers, FiUserCheck, FiCalendar, FiCheckCircle } from 'react-icons/fi'
+import PromotionStats from '../components/PromotionStats'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
@@ -59,6 +60,8 @@ function Dashboard() {
           </div>
         ))}
       </div>
+
+      <PromotionStats />
     </div>
   )
 }

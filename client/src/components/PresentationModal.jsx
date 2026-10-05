@@ -2,6 +2,7 @@ import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { FiX, FiInfo, FiLoader } from 'react-icons/fi'
 import { GRADES } from '../constants/grades'
+import { useAuth } from '../context/AuthContext'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
@@ -82,7 +83,10 @@ function PresentationModal({ presentation, onClose, onSaved }) {
   const today = todayString()
   // Once the submission end date has passed the presentation is closed automatically,
   // so it cannot be ticked open until the end date is extended.
-  const isExpired = Boolean(form.submissionEnd) && form.submissionEnd < today
+  // In development mode presentation dates are not enforced (past dates allowed, never expired).
+  const { appMode } = useAuth()
+  const isDevMode = appMode === 'development'
+  const isExpired = !isDevMode && Boolean(form.submissionEnd) && form.submissionEnd < today
 
   const setField = (field) => (e) => setForm((prev) => ({ ...prev, [field]: e.target.value }))
 
@@ -99,7 +103,7 @@ function PresentationModal({ presentation, onClose, onSaved }) {
       if (!form[start] || !form[end]) return `${label} start and end dates are required`
       // A start date that was already saved (edit) may stay as it is, even if it is in the past now.
       const unchanged = isEdit && presentation[start] === form[start]
-      if (!unchanged && form[start] < today) return `${label} start date cannot be in the past`
+      if (!isDevMode && !unchanged && form[start] < today) return `${label} start date cannot be in the past`
       if (form[end] < form[start]) return `${label} end date cannot be before its start date`
     }
     return null
@@ -183,7 +187,11 @@ function PresentationModal({ presentation, onClose, onSaved }) {
 
             <div className="flex items-start gap-2.5 rounded-lg bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-500">
               <FiInfo className="mt-0.5 shrink-0 text-slate-400" size={14} />
-              <p>Start dates can be today or later. An end date cannot be before its start date.</p>
+              <p>
+                {isDevMode
+                  ? 'Development mode: past dates are allowed. An end date cannot be before its start date.'
+                  : 'Start dates can be today or later. An end date cannot be before its start date.'}
+              </p>
             </div>
 
             <div className="space-y-4">
@@ -215,7 +223,7 @@ function PresentationModal({ presentation, onClose, onSaved }) {
                         <input
                           type="date"
                           value={form[start]}
-                          min={today}
+                          min={isDevMode ? undefined : today}
                           onChange={setStartField(start, end)}
                           required
                           className={inputClass}
@@ -226,7 +234,7 @@ function PresentationModal({ presentation, onClose, onSaved }) {
                         <input
                           type="date"
                           value={form[end]}
-                          min={form[start] || today}
+                          min={form[start] || (isDevMode ? undefined : today)}
                           onChange={setField(end)}
                           required
                           className={inputClass}

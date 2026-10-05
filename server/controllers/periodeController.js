@@ -1,23 +1,27 @@
 import { Op } from 'sequelize'
-import { Periode, Employee, PromotionRequest, EmployeePromotion } from '../models/index.js'
-import { sendPeriodActivationEmail, sendPeriodReminderEmail } from '../services/emailService.js'
-import { getFiscalYear } from '../constants/fiscalYear.js'
+import { Periode, Employee } from '../models/index.js'
+import { sendPeriodActivationEmail } from '../services/emailService.js'
+import { sendNotificationToMany } from '../services/notificationService.js'
+import { ensureFiscalYearPeriods } from '../services/periodeService.js'
 
 const SORTABLE_FIELDS = ['name', 'fiscalYear', 'startDate', 'endDate', 'status', 'createdAt']
 
 export const getPeriodes = async (req, res) => {
   try {
+    // A new fiscal year gets its Periode 1 & 2 the first time the list is opened.
+    await ensureFiscalYearPeriods()
+
     const {
       search = '',
       status = '',
       fiscalYear = '',
-      sortBy = 'startDate',
-      sortOrder = 'DESC',
+      sortBy = 'name',
+      sortOrder = 'ASC',
       page = '1',
       limit = '10',
     } = req.query
 
-    const sortField = SORTABLE_FIELDS.includes(sortBy) ? sortBy : 'startDate'
+    const sortField = SORTABLE_FIELDS.includes(sortBy) ? sortBy : 'name'
     const sortDirection = String(sortOrder).toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
 
     const where = {}
@@ -57,31 +61,32 @@ export const getPeriodes = async (req, res) => {
   }
 }
 
-export const createPeriode = async (req, res) => {
+const isValidDate = (value) => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(`${value}T00:00:00Z`)
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
+}
+
+// Periods themselves are fixed (Periode 1 & 2 per fiscal year); admin can only change their dates.
+export const updatePeriodeDates = async (req, res) => {
   try {
-    const { name, startDate, endDate, fiscalYear } = req.body
-
-    if (!name || !startDate || !endDate) {
-      return res.status(400).json({ message: 'Name, start date, and end date are required' })
+    const periode = await Periode.findByPk(req.params.id)
+    if (!periode) {
+      return res.status(404).json({ message: 'Period not found' })
     }
 
-    const resolvedFiscalYear = fiscalYear ? Number(fiscalYear) : getFiscalYear(startDate)
-
-    if (!Number.isInteger(resolvedFiscalYear)) {
-      return res.status(400).json({ message: 'Fiscal year must be a valid year' })
+    const { startDate, endDate } = req.body
+    if (!isValidDate(startDate) || !isValidDate(endDate)) {
+      return res.status(400).json({ message: 'Start and end dates are required and must be valid dates' })
+    }
+    if (startDate > endDate) {
+      return res.status(400).json({ message: 'The end date cannot be before the start date' })
     }
 
-    const periode = await Periode.create({
-      name,
-      fiscalYear: resolvedFiscalYear,
-      startDate,
-      endDate,
-      status: 'draft',
-    })
-
-    return res.status(201).json({ message: 'Period created', periode })
+    await periode.update({ startDate, endDate })
+    return res.status(200).json({ message: `${periode.name} dates updated`, periode })
   } catch (error) {
-    console.error('Create periode error:', error)
+    console.error('Update periode dates error:', error)
     return res.status(500).json({ message: 'Something went wrong on the server' })
   }
 }
@@ -141,39 +146,6 @@ export const deactivatePeriode = async (req, res) => {
   }
 }
 
-export const deletePeriode = async (req, res) => {
-  try {
-    const { id } = req.params
-    const periode = await Periode.findByPk(id)
-
-    if (!periode) {
-      return res.status(404).json({ message: 'Period not found' })
-    }
-
-    if (periode.status === 'active') {
-      return res.status(400).json({ message: 'Please deactivate this period before deleting it' })
-    }
-
-    const [requestCount, promotionCount] = await Promise.all([
-      PromotionRequest.count({ where: { periodeId: id } }),
-      EmployeePromotion.count({ where: { periodeId: id } }),
-    ])
-
-    if (requestCount > 0 || promotionCount > 0) {
-      return res.status(409).json({
-        message: 'This period already has promotion records and cannot be deleted',
-      })
-    }
-
-    await periode.destroy()
-
-    return res.status(200).json({ message: 'Period deleted' })
-  } catch (error) {
-    console.error('Delete periode error:', error)
-    return res.status(500).json({ message: 'Something went wrong on the server' })
-  }
-}
-
 export const sendPeriodReminder = async (req, res) => {
   try {
     const { id } = req.params
@@ -187,18 +159,24 @@ export const sendPeriodReminder = async (req, res) => {
       return res.status(400).json({ message: 'Reminder can only be sent for an active period' })
     }
 
-    const employees = await Employee.findAll({ where: { role: 'employee', isActive: true } })
-    const result = await sendPeriodReminderEmail(periode, employees)
-
-    if (result.sent === 0) {
-      return res.status(200).json({ message: 'No employee email addresses were found to notify' })
-    }
-
-    return res.status(200).json({
-      message: result.simulated
-        ? `Reminder logged for ${result.sent} employee(s) (SMTP is not configured yet)`
-        : `Reminder sent to ${result.sent} employee(s)`,
+    const employees = await Employee.findAll({
+      where: { role: 'employee', isActive: true },
+      attributes: ['employeeId'],
+      raw: true,
     })
+    // Notification 1 (config/notificationTemplates.js): one email per active employee.
+    const counts = await sendNotificationToMany(
+      'periodReminder',
+      employees.map((employee) => employee.employeeId),
+      { periode }
+    )
+
+    const parts = []
+    if (counts.sent) parts.push(`sent to ${counts.sent} employee(s)`)
+    if (counts.simulated) parts.push(`${counts.simulated} logged only (email is off: dev mode or SMTP not set)`)
+    if (counts.skipped) parts.push(`${counts.skipped} skipped (no email address, or the template is disabled)`)
+    if (counts.failed) parts.push(`${counts.failed} failed`)
+    return res.status(200).json({ message: `Reminder: ${parts.join(', ') || 'no employees to notify'}` })
   } catch (error) {
     console.error('Send period reminder error:', error)
     return res.status(500).json({ message: 'Failed to send reminder email' })

@@ -1,11 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
-import { FiSearch, FiArrowUp, FiArrowDown } from 'react-icons/fi'
+import { FiSearch, FiArrowUp, FiArrowDown, FiPlus, FiUploadCloud } from 'react-icons/fi'
 import Pagination from '../components/Pagination'
+import ManualSummaryModal from '../components/ManualSummaryModal'
+import UploadSummaryModal from '../components/UploadSummaryModal'
 import { useTableQueryState } from '../hooks/useTableQueryState'
 import { getFiscalYearLabel } from '../constants/fiscalYear'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
+
+const STATUS_STYLE = {
+  'Not Recommended': 'bg-red-50 text-red-500',
+  'Pending 6 Month': 'bg-amber-50 text-amber-600',
+}
+
 const LIMIT = 10
 
 const columns = [
@@ -24,6 +32,8 @@ const columns = [
 
 function SummaryPage() {
   const [summaries, setSummaries] = useState([])
+  const [isManualOpen, setIsManualOpen] = useState(false)
+  const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [total, setTotal] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
   const [isLoading, setIsLoading] = useState(true)
@@ -98,10 +108,33 @@ function SummaryPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-800">Summary</h1>
-      <p className="mt-1 text-sm text-slate-500">
-        Employees appear here automatically once the HOD approves their eligibility and no presentation is needed.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Summary</h1>
+          <p className="mt-1 text-sm text-slate-500">
+            Employees appear here automatically once their promotion process is finished, or when added manually
+            (type PTC).
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setIsUploadOpen(true)}
+            className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            <FiUploadCloud size={16} />
+            Upload
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsManualOpen(true)}
+            className="flex items-center gap-2 rounded-lg bg-quaternary px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-quaternary/30 transition hover:bg-quaternary/90"
+          >
+            <FiPlus size={16} />
+            Add Manual
+          </button>
+        </div>
+      </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-3">
         <div className="relative min-w-50 flex-1">
@@ -165,7 +198,11 @@ function SummaryPage() {
                   <td className="px-4 py-3 text-slate-600">{row.type || '-'}</td>
                   <td className="px-4 py-3 text-slate-600">{row.presentation}</td>
                   <td className="px-4 py-3">
-                    <span className="rounded-full bg-green-50 px-2.5 py-1 text-xs font-medium text-green-600">
+                    <span
+                      className={`whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${
+                        STATUS_STYLE[row.status] || 'bg-green-50 text-green-600'
+                      }`}
+                    >
                       {row.status}
                     </span>
                   </td>
@@ -178,6 +215,18 @@ function SummaryPage() {
 
         <Pagination page={page} totalPages={totalPages} total={total} limit={LIMIT} onPageChange={(newPage) => updateTable({ page: newPage })} />
       </div>
+
+      {isUploadOpen && <UploadSummaryModal onClose={() => setIsUploadOpen(false)} onUploaded={fetchSummaries} />}
+
+      {isManualOpen && (
+        <ManualSummaryModal
+          onClose={() => setIsManualOpen(false)}
+          onSaved={() => {
+            setIsManualOpen(false)
+            fetchSummaries()
+          }}
+        />
+      )}
     </div>
   )
 }

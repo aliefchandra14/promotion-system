@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { FiTool, FiAlertTriangle, FiLoader } from 'react-icons/fi'
 import { useAuth } from '../context/AuthContext'
+import AppModeSetting from '../components/AppModeSetting'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
@@ -163,6 +164,8 @@ function SettingsPage() {
           </div>
         </div>
       )}
+
+      <AppModeSetting />
     </div>
   )
 }

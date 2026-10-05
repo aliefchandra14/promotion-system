@@ -1,5 +1,6 @@
-import { Periode, EmployeePromotion, PromotionPresentation } from '../models/index.js'
+import { Periode, EmployeePromotion, PromotionPresentation, PromotionRequest } from '../models/index.js'
 import { closeExpiredPresentations, isSubmissionEnded } from './presentationService.js'
+import { isDevMode } from './appMode.js'
 
 // The presentation schedule/switch that applies to an employee: same period, and the grade
 // they are being promoted to (the "Promote To" grade of their promotion record).
@@ -27,12 +28,33 @@ export const getSubmissionAccess = async (employeeId) => {
     return { periode, promotion, presentation, canUpload: false, reason: 'You are not eligible for submission yet.' }
   }
 
-  if (!presentation?.isOpen) {
+  const request = await PromotionRequest.findOne({
+    where: { employeeId, periodeId: periode.id, type: 'submission' },
+  })
+
+  // Only one submission is allowed: once sent, files are locked while it is with the superior/HOD
+  // and after it is approved. Only a rejection lets the employee change the file and submit again.
+  const alreadySubmitted = alreadySubmittedReason(request)
+  if (alreadySubmitted) {
+    return { periode, promotion, presentation, request, canUpload: false, reason: alreadySubmitted }
+  }
+
+  // In development mode presentation dates and the open switch are not enforced.
+  if (!presentation?.isOpen && !(await isDevMode())) {
     const reason = isSubmissionEnded(presentation)
       ? 'The submission period for your grade has ended.'
       : 'Submission is not open yet for your grade.'
-    return { periode, promotion, presentation, canUpload: false, reason }
+    return { periode, promotion, presentation, request, canUpload: false, reason }
   }
 
-  return { periode, promotion, presentation, canUpload: true, reason: null }
+  return { periode, promotion, presentation, request, canUpload: true, reason: null }
+}
+
+// Why the employee may not submit again, or null when they may (no submission yet, or rejected).
+export const alreadySubmittedReason = (request) => {
+  if (!request || request.status === 'rejected') return null
+  if (request.status === 'approved') {
+    return 'Your project has been approved, so it cannot be submitted again.'
+  }
+  return 'You have already submitted your project and it is waiting for approval. You can only submit again if it is rejected by your Superior, HOD or Admin.'
 }

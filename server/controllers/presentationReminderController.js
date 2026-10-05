@@ -74,8 +74,11 @@ export const sendPresentationReminder = async (req, res) => {
 
     const label = REMINDER_TYPES[context.type].label.toLowerCase()
     const failedNote = result.failed.length > 0 ? ` ${result.failed.length} failed.` : ''
+    const notSentReason = result.devMode
+      ? 'Development mode is on'
+      : 'The email server is not configured yet'
     const message = result.simulated
-      ? `${result.sent} ${label} reminder(s) logged. The email server is not configured yet, so nothing was actually sent.`
+      ? `${result.sent} ${label} reminder(s) logged. ${notSentReason}, so nothing was actually sent.`
       : `${result.sent} ${label} reminder(s) sent.${failedNote}`
 
     return res.status(200).json({ message, ...result })

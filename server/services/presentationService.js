@@ -1,5 +1,6 @@
 import { Op } from 'sequelize'
 import { PromotionPresentation } from '../models/index.js'
+import { isDevMode } from './appMode.js'
 
 // Today as "YYYY-MM-DD" in the server's local time, comparable with DATEONLY values.
 export const todayString = () => {
@@ -17,8 +18,11 @@ export const isSubmissionEnded = (presentation) =>
 // Switches off every open presentation whose submission end date has passed.
 // Cheap single UPDATE, called wherever the open/closed state is read, so a presentation
 // closes by itself without anyone (or any scheduler) having to touch it.
-export const closeExpiredPresentations = () =>
-  PromotionPresentation.update(
+// Skipped in development mode, where presentation dates are not enforced.
+export const closeExpiredPresentations = async () => {
+  if (await isDevMode()) return
+  await PromotionPresentation.update(
     { isOpen: false },
     { where: { isOpen: true, submissionEnd: { [Op.lt]: todayString() } } }
   )
+}

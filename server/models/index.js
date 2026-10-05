@@ -1,3 +1,4 @@
+import { DataTypes } from 'sequelize'
 import sequelize from '../config/db.js'
 import Employee from './Employee.js'
 import Periode from './Periode.js'
@@ -9,6 +10,12 @@ import PromotionSummary from './PromotionSummary.js'
 import PromotionPresentation from './PromotionPresentation.js'
 import ProjectSubmissionFile from './ProjectSubmissionFile.js'
 import PresentationReminderLog from './PresentationReminderLog.js'
+import SubmissionHistory from './SubmissionHistory.js'
+import PresentationAssessment from './PresentationAssessment.js'
+import PresentationDecision from './PresentationDecision.js'
+import TaskSubmissionFile from './TaskSubmissionFile.js'
+import TaskReview from './TaskReview.js'
+import TaskDecision from './TaskDecision.js'
 
 Employee.belongsTo(Employee, {
   foreignKey: 'trainer',
@@ -87,6 +94,20 @@ const seedAdmin = async () => {
   }
 }
 
+// sequelize.sync() creates missing tables but never adds columns to an existing one,
+// so columns added to `settings` after it was first created are added here.
+const ensureSettingColumns = async () => {
+  const queryInterface = sequelize.getQueryInterface()
+  const columns = await queryInterface.describeTable('settings')
+  if (!columns.appMode) {
+    await queryInterface.addColumn('settings', 'appMode', {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'production',
+    })
+  }
+}
+
 const seedSettings = async () => {
   await Setting.findOrCreate({ where: { id: 1 }, defaults: { maintenanceMode: false } })
 }
@@ -96,6 +117,7 @@ const connectDB = async () => {
     await sequelize.authenticate()
     console.log('MSSQL database connection successful')
     await sequelize.sync()
+    await ensureSettingColumns()
     await seedAdmin()
     await seedSettings()
   } catch (error) {
@@ -115,6 +137,12 @@ export {
   PromotionPresentation,
   ProjectSubmissionFile,
   PresentationReminderLog,
+  SubmissionHistory,
+  PresentationAssessment,
+  PresentationDecision,
+  TaskSubmissionFile,
+  TaskReview,
+  TaskDecision,
   Setting,
   connectDB,
 }

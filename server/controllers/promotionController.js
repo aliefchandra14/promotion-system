@@ -4,12 +4,15 @@ import {
   Employee,
   Periode,
   PromotionRequest,
-  EmployeeJudge,
   EmployeePromotion,
   PromotionSummary,
+  ProjectSubmissionFile,
 } from '../models/index.js'
 import { addToSummary } from '../services/summaryService.js'
-import { findPresentationFor } from '../services/submissionAccess.js'
+import { findPresentationFor, getSubmissionAccess } from '../services/submissionAccess.js'
+import { SUBMISSION_GUIDELINES } from '../constants/submissionGuidelines.js'
+import { logSubmitted, logDecision, getSubmissionHistory } from '../services/submissionHistoryService.js'
+import { notify, sendNotificationToMany } from '../services/notificationService.js'
 
 const TYPES = ['eligibility', 'submission']
 
@@ -40,6 +43,15 @@ export const getMyPromotions = async (req, res) => {
   }
 }
 
+// Notification 4 (config/notificationTemplates.js): the employee submitted their project.
+const notifyProjectSubmitted = (employee, periode, fileNames) =>
+  notify('projectSubmitted', {
+    employeeId: employee.employeeId,
+    periode,
+    actorId: employee.employeeId,
+    vars: { fileNames: fileNames.join(', ') },
+  })
+
 export const startPromotionRequest = async (req, res) => {
   try {
     const { type } = req.body
@@ -58,18 +70,29 @@ export const startPromotionRequest = async (req, res) => {
       return res.status(400).json({ message: 'You do not have a superior assigned yet, contact admin' })
     }
 
+    let fileNames = []
     if (type === 'submission') {
-      const promotion = await EmployeePromotion.findOne({
-        where: { employeeId: employee.employeeId, periodeId: activePeriode.id },
-      })
-      if (promotion?.adminDecision !== 'eligible_for_submission') {
-        return res.status(400).json({ message: 'You are not yet eligible to submit for this period' })
+      // Same rules as the upload: eligible, submission open, and not already submitted (unless rejected).
+      const access = await getSubmissionAccess(employee.employeeId)
+      if (!access.canUpload) {
+        return res.status(400).json({ message: access.reason })
       }
 
-      const presentation = await findPresentationFor(promotion, activePeriode.id)
-      if (!presentation?.isOpen) {
-        return res.status(400).json({ message: 'Submission is not open yet for your grade' })
+      const files = await ProjectSubmissionFile.findAll({
+        where: { employeeId: employee.employeeId, periodeId: activePeriode.id },
+        attributes: ['originalName'],
+        order: [['createdAt', 'ASC']],
+        raw: true,
+      })
+      if (files.length === 0) {
+        return res.status(400).json({ message: 'Please upload your project file before submitting' })
       }
+      if (files.length > SUBMISSION_GUIDELINES.maxFiles) {
+        return res.status(400).json({
+          message: `Only ${SUBMISSION_GUIDELINES.maxFiles} file can be submitted. Delete the extra files first.`,
+        })
+      }
+      fileNames = files.map((file) => file.originalName)
     }
 
     const [request, created] = await PromotionRequest.findOrCreate({
@@ -78,7 +101,32 @@ export const startPromotionRequest = async (req, res) => {
     })
 
     if (!created) {
+      // A rejected submission can be sent again: it restarts from the superior with a clean slate.
+      if (type === 'submission' && request.status === 'rejected') {
+        await sequelize.transaction(async (transaction) => {
+          await request.update(
+            {
+              status: 'pending_superior',
+              superiorDecision: null,
+              superiorDecidedAt: null,
+              superiorRemark: null,
+              hodDecision: null,
+              hodDecidedAt: null,
+              hodRemark: null,
+            },
+            { transaction }
+          )
+          await logSubmitted({ employee, periodeId: activePeriode.id, fileNames, transaction })
+        })
+        notifyProjectSubmitted(employee, activePeriode, fileNames)
+        return res.status(200).json({ message: 'Submission sent again for approval', request })
+      }
       return res.status(409).json({ message: 'A request already exists for this period', request })
+    }
+
+    if (type === 'submission') {
+      await logSubmitted({ employee, periodeId: activePeriode.id, fileNames })
+      notifyProjectSubmitted(employee, activePeriode, fileNames)
     }
 
     return res.status(201).json({ message: 'Request submitted', request })
@@ -235,20 +283,22 @@ export const getPendingCount = async (req, res) => {
     const hodIds = hodMembers.map((m) => m.employeeId)
 
     if (!activePeriode || (superiorIds.length === 0 && hodIds.length === 0)) {
-      return res.status(200).json({ pending: 0 })
+      return res.status(200).json({ pending: 0, byType: { eligibility: 0, submission: 0 } })
     }
 
     const orConditions = []
     if (superiorIds.length) orConditions.push({ employeeId: superiorIds, status: 'pending_superior' })
     if (hodIds.length) orConditions.push({ employeeId: hodIds, status: 'pending_hod' })
+    const where = { periodeId: activePeriode.id, [Op.or]: orConditions }
 
-    const pending = await PromotionRequest.count({
-      where: { periodeId: activePeriode.id, [Op.or]: orConditions },
-      distinct: true,
-      col: 'employeeId',
-    })
+    // byType: requests waiting per Members tab (one request per employee per type).
+    const [pending, eligibility, submission] = await Promise.all([
+      PromotionRequest.count({ where, distinct: true, col: 'employeeId' }),
+      PromotionRequest.count({ where: { ...where, type: 'eligibility' } }),
+      PromotionRequest.count({ where: { ...where, type: 'submission' } }),
+    ])
 
-    return res.status(200).json({ pending })
+    return res.status(200).json({ pending, byType: { eligibility, submission } })
   } catch (error) {
     console.error('Get pending count error:', error)
     return res.status(500).json({ message: 'Something went wrong on the server' })
@@ -414,6 +464,11 @@ export const bulkEligibilityAction = async (req, res) => {
           { adminDecision: action },
           { where: { employeeId: approvedIds, periodeId: activePeriode.id } }
         )
+        // Notification 3 (config/notificationTemplates.js), one per employee, in the background.
+        sendNotificationToMany('eligibleForSubmission', approvedIds, {
+          periode: activePeriode,
+          actorId: req.user.employeeId,
+        }).catch(() => {})
       }
     }
 
@@ -447,8 +502,16 @@ export const decideRequest = async (req, res) => {
       return res.status(404).json({ message: 'Request not found' })
     }
 
+    // Submission decisions always need a comment, from the superior and from the HOD.
+    if (request.type === 'submission' && !String(remark || '').trim()) {
+      return res.status(400).json({
+        message: decision === 'reject' ? 'Please provide a reason for rejection' : 'Please fill in the comment',
+      })
+    }
+
     const employee = await Employee.findOne({ where: { employeeId: request.employeeId } })
     const me = req.user.employeeId
+    const actorRole = request.status === 'pending_superior' ? 'superior' : 'hod'
 
     if (request.status === 'pending_superior') {
       if (employee?.superior !== me) {
@@ -472,8 +535,14 @@ export const decideRequest = async (req, res) => {
 
     // Eligibility approved by the HOD and no presentation needed -> straight into the summary.
     let movedToSummary = false
+    const actor = await Employee.findOne({ where: { employeeId: me }, attributes: ['employeeId', 'name'] })
+
     await sequelize.transaction(async (transaction) => {
       await request.save({ transaction })
+
+      if (request.type === 'submission') {
+        await logDecision({ request, actorRole, actor, decision, remark: remark || null, transaction })
+      }
 
       if (request.type === 'eligibility' && request.status === 'approved') {
         const promotion = await EmployeePromotion.findOne({
@@ -489,6 +558,19 @@ export const decideRequest = async (req, res) => {
       }
     })
 
+    // Notifications 2 (eligibility) and 5 (submission), see config/notificationTemplates.js.
+    notify(request.type === 'eligibility' ? 'eligibilityApproval' : 'submissionApproval', {
+      employeeId: request.employeeId,
+      periode: await Periode.findByPk(request.periodeId),
+      actorId: me,
+      vars: {
+        decision: decision === 'approve' ? 'Approved' : 'Rejected',
+        stage: actorRole === 'superior' ? 'Superior' : 'HOD',
+        approverName: actor?.name || me,
+        comment: remark || '',
+      },
+    })
+
     return res.status(200).json({
       message: movedToSummary ? 'Decision recorded. Moved to summary automatically.' : 'Decision recorded',
       request,
@@ -500,22 +582,28 @@ export const decideRequest = async (req, res) => {
   }
 }
 
-export const getJudgingAssignments = async (req, res) => {
+// Submission history of the employee behind a request, for their superior/HOD while deciding.
+export const getRequestSubmissionHistory = async (req, res) => {
   try {
-    const judgeId = req.user.employeeId
-    const links = await EmployeeJudge.findAll({ where: { judgeId } })
-    const employeeIds = links.map((link) => link.employeeId)
+    const request = await PromotionRequest.findByPk(req.params.id)
+    if (!request || request.type !== 'submission') {
+      return res.status(404).json({ message: 'Request not found' })
+    }
 
-    const employees = employeeIds.length
-      ? await Employee.findAll({
-          where: { employeeId: employeeIds },
-          attributes: ['employeeId', 'name', 'department', 'grade'],
-        })
-      : []
+    const employee = await Employee.findOne({
+      where: { employeeId: request.employeeId },
+      attributes: ['employeeId', 'superior', 'hod'],
+    })
+    const me = req.user.employeeId
+    const isAllowed = req.user.role === 'admin' || employee?.superior === me || employee?.hod === me
+    if (!isAllowed) {
+      return res.status(403).json({ message: 'You are not an approver for this employee' })
+    }
 
-    return res.status(200).json({ employees })
+    const history = await getSubmissionHistory(request.employeeId, request.periodeId, request)
+    return res.status(200).json({ history })
   } catch (error) {
-    console.error('Get judging assignments error:', error)
+    console.error('Get request submission history error:', error)
     return res.status(500).json({ message: 'Something went wrong on the server' })
   }
 }

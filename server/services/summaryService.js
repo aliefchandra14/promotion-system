@@ -8,23 +8,24 @@ export const SUMMARY_STATUS_OK = 'OK'
  * and flags their promotion record as summarized.
  *
  * - periode: title of the active period (snapshot)
- * - FY: the current fiscal year (April - March), e.g. 2026 -> "FY2026"
- * - status: always "OK"
+ * - FY: the fiscal year of the period (April - March), e.g. 2026 -> "FY2026"
+ * - status: "OK", or the presentation result when given (e.g. "Recommended")
+ * - remark: the promotion remark, or the given remark
  *
  * Pass `transaction` to make it atomic with the caller's other writes.
  */
-export const addToSummary = async ({ promotion, periode, transaction }) => {
+export const addToSummary = async ({ promotion, periode, status, remark, transaction }) => {
   const snapshot = {
     name: promotion.name,
     department: promotion.department,
     currentGrade: promotion.currentGrade,
     promoteGrade: promotion.promoteGrade,
-    fiscalYear: getCurrentFiscalYear(),
+    fiscalYear: periode.fiscalYear ?? getCurrentFiscalYear(),
     periodeName: periode.name,
     type: promotion.type,
     presentation: promotion.presentation,
-    status: SUMMARY_STATUS_OK,
-    remark: promotion.remark || '',
+    status: status || SUMMARY_STATUS_OK,
+    remark: remark ?? (promotion.remark || ''),
   }
 
   const [summary, created] = await PromotionSummary.findOrCreate({

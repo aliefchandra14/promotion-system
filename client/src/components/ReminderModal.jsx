@@ -96,7 +96,15 @@ function ReminderModal({ presentation, type, onClose, onSent }) {
 
           {preview && (
             <>
-              {!preview.smtpConfigured && (
+              {preview.devMode ? (
+                <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-700">
+                  <FiAlertTriangle className="mt-0.5 shrink-0" size={14} />
+                  <p>
+                    Development mode is on. Sending will only be logged on the server, nothing is actually
+                    emailed.
+                  </p>
+                </div>
+              ) : !preview.smtpConfigured && (
                 <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-700">
                   <FiAlertTriangle className="mt-0.5 shrink-0" size={14} />
                   <p>

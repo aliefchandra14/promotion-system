@@ -22,6 +22,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 const EligibilityMonitoringPage = lazy(() => import('./pages/EligibilityMonitoringPage'))
 const SummaryPage = lazy(() => import('./pages/SummaryPage'))
 const PresentationsPage = lazy(() => import('./pages/PresentationsPage'))
+const PresentationDetailPage = lazy(() => import('./pages/PresentationDetailPage'))
 
 const PageFallback = () => <p className="p-6 text-sm text-slate-400">Loading...</p>
 
@@ -112,6 +113,14 @@ function AppRoutes() {
           element={
             <AdminRoute>
               <PresentationsPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/presentations/:id"
+          element={
+            <AdminRoute>
+              <PresentationDetailPage />
             </AdminRoute>
           }
         />

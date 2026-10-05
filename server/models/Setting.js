@@ -17,6 +17,13 @@ const Setting = sequelize.define(
       type: DataTypes.STRING(255),
       allowNull: true,
     },
+    // 'development': no email is sent and presentation dates are not enforced.
+    // 'production': normal behaviour.
+    appMode: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'production',
+    },
   },
   {
     tableName: 'settings',

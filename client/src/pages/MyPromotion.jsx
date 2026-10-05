@@ -1,9 +1,12 @@
 import { useSearchParams } from 'react-router-dom'
 import ProjectSubmissionTab from '../components/ProjectSubmissionTab'
+import TaskSubmissionTab from '../components/TaskSubmissionTab'
+import PromotionHistoryTab from '../components/PromotionHistoryTab'
 
 const TABS = [
   { key: 'project', label: 'Submission Project' },
   { key: 'task', label: 'Submission Task' },
+  { key: 'history', label: 'Promotion History' },
 ]
 
 function MyPromotion() {
@@ -31,13 +34,9 @@ function MyPromotion() {
         ))}
       </div>
 
-      {tab === 'project' ? (
-        <ProjectSubmissionTab />
-      ) : (
-        <p className="mt-6 max-w-lg rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">
-          Submission task will be available here once admin opens it.
-        </p>
-      )}
+      {tab === 'project' && <ProjectSubmissionTab />}
+      {tab === 'task' && <TaskSubmissionTab />}
+      {tab === 'history' && <PromotionHistoryTab />}
     </div>
   )
 }

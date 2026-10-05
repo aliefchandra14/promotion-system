@@ -183,7 +183,9 @@ export const importEmployeePromotions = async (req, res) => {
           results.created += 1
         }
 
-        if (employeeExists.superior) {
+        // Someone already past eligibility (e.g. carried over after "Pending 6 Month") needs no new approval.
+        const pastEligibility = existing && existing.adminDecision !== 'pending'
+        if (employeeExists.superior && !pastEligibility) {
           await PromotionRequest.findOrCreate({
             where: { employeeId, periodeId: periode.id, type: 'eligibility' },
             defaults: { status: 'pending_superior' },
